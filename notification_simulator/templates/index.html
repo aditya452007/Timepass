@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification System Simulator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Main Architecture Panel -->
+        <main class="architecture-panel">
+            <header class="panel-header">
+                <h1>Notification System Simulator</h1>
+                <p>Interactive view of a production-ready asynchronous event sequence.</p>
+            </header>
+            
+            <div class="diagram-container">
+                <div class="diagram-grid">
+                    <div class="box node" id="node-ingestion" data-tooltip="Ingestion Layer: Validates incoming events. Similar to AWS API Gateway. Ensures event payload has proper schema.">
+                        <div class="icon">📥</div>
+                        <div class="label">API Gateway</div>
+                        <div class="status">Idle</div>
+                    </div>
+                    
+                    <div class="box node" id="node-preference_check" data-tooltip="User Preferences: Queries DB for user opt-outs and 'Do Not Disturb' state to filter target channels.">
+                        <div class="icon">⚙️</div>
+                        <div class="label">Preference Check</div>
+                        <div class="status">Idle</div>
+                    </div>
+                    
+                    <div class="box node" id="node-online_check" data-tooltip="Online Status (Redis): Fast check if user is currently active in-app. Often suppresses emails if User is online.">
+                        <div class="icon">🔌</div>
+                        <div class="label">Online Check</div>
+                        <div class="status">Idle</div>
+                    </div>
+                    
+                    <div class="box node" id="node-publisher" data-tooltip="Publisher (Pub/Sub): Fans out the approved event to separate channels asynchronously (e.g. AWS SNS -> SQS queues).">
+                        <div class="icon">📢</div>
+                        <div class="label">Publisher (Fanout)</div>
+                        <div class="status">Idle</div>
+                    </div>
+                </div>
+
+                <div class="queues-section">
+                    <h3>Channel Queues (Message Brokers)</h3>
+                    <div class="queues-grid">
+                        <div class="queue-col">
+                            <div class="queue-node" id="queue-email">
+                                <h4>Email</h4>
+                                <div class="q-bar-container"><div class="q-bar" id="q-bar-email"></div></div>
+                                <span class="q-count">0</span>
+                            </div>
+                            <div class="box worker-node" id="node-worker_email" data-tooltip="Worker polling email queue. Can hit external rate limits like SendGrid/AWS SES."> Worker </div>
+                        </div>
+                        <div class="queue-col">
+                            <div class="queue-node" id="queue-push">
+                                <h4>Push</h4>
+                                <div class="q-bar-container"><div class="q-bar" id="q-bar-push"></div></div>
+                                <span class="q-count">0</span>
+                            </div>
+                            <div class="box worker-node" id="node-worker_push" data-tooltip="Worker for FCM/APNs. Sends push notifications."> Worker </div>
+                        </div>
+                        <div class="queue-col">
+                            <div class="queue-node" id="queue-sms">
+                                <h4>SMS</h4>
+                                <div class="q-bar-container"><div class="q-bar" id="q-bar-sms"></div></div>
+                                <span class="q-count">0</span>
+                            </div>
+                            <div class="box worker-node" id="node-worker_sms" data-tooltip="Worker for Twilio/SNS SMS. Often has strict rate limits."> Worker </div>
+                        </div>
+                        <div class="queue-col">
+                            <div class="queue-node" id="queue-in_app">
+                                <h4>In-App</h4>
+                                <div class="q-bar-container"><div class="q-bar" id="q-bar-in_app"></div></div>
+                                <span class="q-count">0</span>
+                            </div>
+                            <div class="box worker-node" id="node-worker_in_app" data-tooltip="Worker saving the notification to the DB for in-app bell menu display."> Worker </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dlq-section">
+                    <div class="box dlq-node" id="node-dlq" data-tooltip="Dead Letter Queue: Holding area for messages that failed repeatedly. Operators inspect this.">
+                        <div class="icon">☠️</div>
+                        <div class="label">Dead Letter Queue (DLQ)</div>
+                        <div class="status">0 Messages</div>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <div class="scenarios">
+                <h3>Pre-built Scenarios</h3>
+                <div class="scenario-buttons">
+                    <button class="scenario-btn secondary" data-scenario="happy">Happy Path</button>
+                    <button class="scenario-btn secondary" data-scenario="outage">Provider Outage</button>
+                    <button class="scenario-btn secondary" data-scenario="dnd">DND User</button>
+                    <button class="scenario-btn secondary" data-scenario="async">Sync vs Async</button>
+                    <button class="scenario-btn secondary tooltip-toggle">Toggle Tooltips</button>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Side Control Panel -->
+        <aside class="control-panel">
+            <div class="controls-card">
+                <h2>Controls</h2>
+                <div class="form-group">
+                    <label>Event Type</label>
+                    <select id="event-type">
+                        <option value="user.signup">User Signup (Email, In-App)</option>
+                        <option value="order.placed">Order Placed (Email, Push, SMS)</option>
+                        <option value="password.reset">Password Reset (Priority Email)</option>
+                        <option value="promo.flash_sale">Flash Sale (Email, Push)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Simulated API Fail Rate: <span id="fail-rate-val">0%</span></label>
+                    <input type="range" id="fail-rate" min="0" max="100" value="0">
+                </div>
+                
+                <div class="toggles form-group">
+                    <label><input type="checkbox" id="toggle-dnd"> User DND Mode active</label>
+                    <label><input type="checkbox" id="toggle-online" checked> User is Online</label>
+                    <label><input type="checkbox" id="toggle-slow"> Slow Mode (Educator)</label>
+                </div>
+                
+                <button id="fire-btn" class="primary-btn">🔥 TRIGGER EVENT 🔥</button>
+            </div>
+            
+            <div class="audit-card">
+                <h2>Live Audit Log</h2>
+                <div id="audit-log" class="audit-log">
+                    <div class="log-entry info">System ready. Waiting for event trigger...</div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Script at bottom of body -->
+    <script src="/static/simulator.js"></script>
+</body>
+</html>
