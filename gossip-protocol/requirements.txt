@@ -1,0 +1,6 @@
+cassandra-driver==3.29.3
+docker==7.0.0
+pytest==9.0.0
+psutil==7.2.2
+pandas==3.0.1
+matplotlib==3.10.8
